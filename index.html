@@ -99,12 +99,14 @@ body{
     <div class="modal">
         <h2>Recommended Browser</h2>
         <p id="message"></p>
-        <button onclick="openInChrome()">Open in Chrome</button>
+        <button onclick="openInChrome()" id="mainBtn">Open in Chrome</button>
 
-        <!-- Shown only if the protocol redirect didn't work -->
         <div class="url-box" id="urlBox">
-            <span>Copy this URL and paste it into Chrome:</span>
+            <span>Copy this URL and open it in Chrome:</span>
             <span id="urlText"></span>
+            <button onclick="copyUrl()" id="copyBtn" style="margin-top:10px;width:100%;font-size:13px;padding:8px;">
+                Copy URL
+            </button>
         </div>
     </div>
 </div>
@@ -188,28 +190,30 @@ async function detectBrowser() {
 
 function openInChrome() {
     const currentUrl = window.location.href;
+    document.getElementById("urlText").textContent = currentUrl;
+    document.getElementById("urlBox").style.display = "block";
+    document.getElementById("mainBtn").textContent = "Open Chrome → paste the URL below";
+    document.getElementById("mainBtn").disabled = true;
+    document.getElementById("mainBtn").style.background = "#888";
+}
 
-    // Chrome registers googlechrome:// (HTTP) and googlechromes:// (HTTPS) as
-    // protocol handlers on Windows and macOS during installation.
-    // Strip the scheme and prefix with the Chrome-specific one.
-    const isHttps = currentUrl.startsWith("https://");
-    const withoutScheme = currentUrl.replace(/^https?:\/\//, "");
-    const chromeUrl = (isHttps ? "googlechromes://" : "googlechrome://") + withoutScheme;
-
-    // Attempt 1: hand off to Chrome via its registered protocol handler
-    window.location.href = chromeUrl;
-
-    // Attempt 2: after a short delay, try to close this tab.
-    // window.close() only succeeds if this tab was opened by script — otherwise
-    // the browser silently ignores it or shows a confirmation.
-    setTimeout(() => window.close(), 500);
-
-    // Attempt 3: if the user is still here after 1.5s, the protocol didn't work.
-    // Show the URL so they can copy-paste it into Chrome manually.
-    setTimeout(() => {
-        document.getElementById("urlText").textContent = currentUrl;
-        document.getElementById("urlBox").style.display = "block";
-    }, 1500);
+async function copyUrl() {
+    const url = document.getElementById("urlText").textContent;
+    try {
+        await navigator.clipboard.writeText(url);
+        document.getElementById("copyBtn").textContent = "Copied!";
+        document.getElementById("copyBtn").style.background = "#34a853";
+        setTimeout(() => {
+            document.getElementById("copyBtn").textContent = "Copy URL";
+            document.getElementById("copyBtn").style.background = "";
+        }, 2000);
+    } catch (_) {
+        // Clipboard API blocked — select the text instead so user can copy manually
+        const range = document.createRange();
+        range.selectNode(document.getElementById("urlText"));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+    }
 }
 </script>
 
