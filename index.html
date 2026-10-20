@@ -147,7 +147,7 @@ async function detectBrowser() {
             }
 
             // Any non-noise brand that isn't Google Chrome is a known fork
-            const real = list.find(b => !NOISE_BRANDS.test(b) && b.brand !== "Google Chrome");
+            const real = list.find(b => !NOISE_BRANDS.test(b.brand) && b.brand !== "Google Chrome");
             if (real) return { name: real.brand, isChrome: false };
 
         } catch (_) {}
