@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser Check</title>
+
+<style>
+body{
+    margin:0;
+    font-family:Segoe UI, sans-serif;
+}
+
+.modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.6);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+}
+
+.modal{
+    background:white;
+    width:450px;
+    max-width:90%;
+    border-radius:16px;
+    padding:30px;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.3);
+    animation:popup .3s ease;
+}
+
+.modal h2{
+    margin-top:0;
+    color:#d32f2f;
+}
+
+.modal p{
+    line-height:1.5;
+    color:#444;
+}
+
+.modal button{
+    background:#4285F4;
+    color:white;
+    border:none;
+    border-radius:8px;
+    padding:12px 25px;
+    cursor:pointer;
+    font-size:16px;
+}
+
+.modal button:hover{
+    background:#3367d6;
+}
+
+.url-box{
+    display:none;
+    margin-top:18px;
+    background:#f1f3f4;
+    border-radius:8px;
+    padding:10px 14px;
+    font-size:13px;
+    color:#333;
+    word-break:break-all;
+    text-align:left;
+}
+
+.url-box span{
+    display:block;
+    font-weight:600;
+    margin-bottom:4px;
+    color:#555;
+}
+
+
+@keyframes popup{
+    from{
+        transform:scale(.85);
+        opacity:0;
+    }
+    to{
+        transform:scale(1);
+        opacity:1;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<h1 style="text-align:center;margin-top:100px;">
+    Welcome to My Website
+</h1>
+
+<div class="modal-overlay" id="browserModal">
+    <div class="modal">
+        <h2>Recommended Browser</h2>
+        <p id="message"></p>
+        <button onclick="openInChrome()">Open in Chrome</button>
+
+        <!-- Shown only if the protocol redirect didn't work -->
+        <div class="url-box" id="urlBox">
+            <span>Copy this URL and paste it into Chrome:</span>
+            <span id="urlText"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+// Placeholder strings that Chromium injects — not real browser names
+const NOISE_BRANDS = /^(Not.A.Brand|Chromium)$/i;
+
+// Real Chrome full versions always follow MAJOR.0.BUILD.PATCH — second segment is always 0.
+// Chromium forks that spoof the brand name (e.g. Prisma Access Browser) use a different
+// build scheme, so their second segment is non-zero (e.g. 155.16.7.85).
+function looksLikeRealChrome(fullVersion) {
+    const parts = (fullVersion || "").split(".");
+    return parts.length >= 2 && parts[1] === "0";
+}
+
+async function detectBrowser() {
+    // 1. Brave hides itself from UA and brand lists — check its own API first
+    if (navigator.brave) {
+        try {
+            if (await navigator.brave.isBrave()) return { name: "Brave", isChrome: false };
+        } catch (_) {}
+    }
+
+    const uaData = navigator.userAgentData;
+
+    // 2. High-entropy brand list — full version exposes forks that spoof brand names
+    if (uaData && uaData.getHighEntropyValues) {
+        try {
+            const he = await uaData.getHighEntropyValues(["fullVersionList"]);
+            const list = he.fullVersionList || [];
+
+            const chromeEntry = list.find(b => b.brand === "Google Chrome");
+            if (chromeEntry) {
+                // Real Chrome: version like 130.0.6723.116 (second segment = 0)
+                // Impersonator:  version like 155.16.7.85  (second segment ≠ 0)
+                if (!looksLikeRealChrome(chromeEntry.version)) {
+                    return { name: "an unsupported browser", isChrome: false };
+                }
+            }
+
+            // Any non-noise brand that isn't Google Chrome is a known fork
+            const real = list.find(b => !NOISE_BRANDS.test(b.brand) && b.brand !== "Google Chrome");
+            if (real) return { name: real.brand, isChrome: false };
+
+        } catch (_) {}
+    }
+
+    // 3. Low-entropy brand list (quick, no permission required)
+    if (uaData && uaData.brands) {
+        const brands = uaData.brands.map(b => b.brand);
+        const real = brands.find(b => !NOISE_BRANDS.test(b) && b !== "Google Chrome");
+        if (real) return { name: real, isChrome: false };
+    }
+
+    // 4. UA string — catches non-Chromium browsers and any forks that expose themselves
+    const ua = navigator.userAgent;
+
+    if (/Vivaldi/i.test(ua))        return { name: "Vivaldi",          isChrome: false };
+    if (/OPR\//i.test(ua))          return { name: "Opera",            isChrome: false };
+    if (/Edg\//i.test(ua))          return { name: "Microsoft Edge",   isChrome: false };
+    if (/SamsungBrowser/i.test(ua)) return { name: "Samsung Internet", isChrome: false };
+    if (/YaBrowser/i.test(ua))      return { name: "Yandex Browser",   isChrome: false };
+    if (/Firefox/i.test(ua))        return { name: "Firefox",          isChrome: false };
+    if (/Safari/i.test(ua) && !/Chrome/i.test(ua))
+                                    return { name: "Safari",           isChrome: false };
+    if (/Chrome/i.test(ua))         return { name: "Google Chrome",    isChrome: true  };
+
+    return { name: "your current browser", isChrome: false };
+}
+
+(async () => {
+    const { name, isChrome } = await detectBrowser();
+
+    if (!isChrome) {
+        document.getElementById("message").textContent =
+            `You are currently using ${name}. For the best experience, please use Google Chrome.`;
+        document.getElementById("browserModal").style.display = "flex";
+    }
+})();
+
+function openInChrome() {
+    const currentUrl = window.location.href;
+
+    // Chrome registers googlechrome:// (HTTP) and googlechromes:// (HTTPS) as
+    // protocol handlers on Windows and macOS during installation.
+    // Strip the scheme and prefix with the Chrome-specific one.
+    const isHttps = currentUrl.startsWith("https://");
+    const withoutScheme = currentUrl.replace(/^https?:\/\//, "");
+    const chromeUrl = (isHttps ? "googlechromes://" : "googlechrome://") + withoutScheme;
+
+    // Attempt 1: hand off to Chrome via its registered protocol handler
+    window.location.href = chromeUrl;
+
+    // Attempt 2: after a short delay, try to close this tab.
+    // window.close() only succeeds if this tab was opened by script — otherwise
+    // the browser silently ignores it or shows a confirmation.
+    setTimeout(() => window.close(), 500);
+
+    // Attempt 3: if the user is still here after 1.5s, the protocol didn't work.
+    // Show the URL so they can copy-paste it into Chrome manually.
+    setTimeout(() => {
+        document.getElementById("urlText").textContent = currentUrl;
+        document.getElementById("urlBox").style.display = "block";
+    }, 1500);
+}
+</script>
+
+</body>
+</html>
